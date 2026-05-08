@@ -1,0 +1,26 @@
+﻿name = "wk-et"
+main = "_worker.js"
+compatibility_date = "2026-05-08"
+no_bundle = true
+workers_dev = true
+preview_urls = true
+
+
+[vars]
+# 修改为自己uuid
+UUID = "cee6664d-c051-4a90-9d8c-8c47094192e5"
+ADMIN = "admin"
+
+[[kv_namespaces]]
+binding = "KV"
+# 修改为自己创建的KV命名空间ID
+id = "f615ed236cb1471dacdcfc7068d55b86"
+
+
+[observability]
+[observability.logs]
+enabled = true
+invocation_logs = true
+
+[observability.traces]
+enabled = true

@@ -1,0 +1,216 @@
+name: auto update and deploy
+
+on:
+  schedule:
+    - cron: "0 16 * * *" # 每天 00:00 北京时间 (UTC+8)
+  workflow_dispatch: # 允许手动触发
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      actions: write
+
+    env:
+      WORKER_URL: https://raw.githubusercontent.com/cmliu/edgetunnel/refs/heads/main/_worker.js
+      # KV 名称
+      KV_NAME: wb-et-kv
+
+    steps:
+      - name: Checkout 仓库 # 检出仓库代码
+        uses: actions/checkout@v6
+
+      - name: 设置 Node.js 最新稳定版 # 设置 Node.js 最新稳定版
+        uses: actions/setup-node@v6
+        with:
+          node-version: "lts/*"
+
+      - name: 安装依赖
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y jq curl unzip
+
+      - name: 获取最新版本
+        id: get_last_version
+        run: |
+          # 定义文件变量
+          FILE1="tmp/_worker_origin.js"
+          # 创建 tmp 目录
+          mkdir -p tmp
+          # 下载最新版本的 worker.js 到 tmp 目录
+          curl -0 -o "$FILE1" ${{ env.WORKER_URL }}
+
+      - name: 判断是否更新
+        id: check_update
+        run: |
+          # 定义文件变量
+          FILE1="tmp/_worker_origin.js"
+          FILE2="_worker_origin.js"
+
+          # ====================== 文件存在性校验 ======================
+          # 检查第一个文件是否存在
+          if [ ! -f "$FILE1" ]; then
+            echo "错误：文件 '$FILE1' 不存在！不需要更新！"
+            echo "need_update=false" >> $GITHUB_ENV
+            exit 1
+          fi
+
+          # 检查第二个文件是否存在
+          if [ ! -f "$FILE2" ]; then
+            echo "文件 '$FILE2' 不存在！需要更新！"
+            echo "need_update=true" >> $GITHUB_ENV
+            exit 1
+          fi
+
+          # ====================== 核心比对逻辑 ======================
+          # cmp -s：静默模式，不输出差异内容，仅通过退出码判断是否一致
+          # 退出码 0 = 内容一致；非0 = 内容不一致
+          if cmp -s "$FILE1" "$FILE2"; then
+            echo "need_update=false" >> $GITHUB_ENV
+            echo "版本一致，无需更新"
+          else
+            echo "need_update=true" >> $GITHUB_ENV
+            echo "版本不一致，需要更新"
+          fi
+
+      - name: 代码混淆
+        # 仅在需要更新时执行此步骤
+        if: env.need_update == 'true'
+        run: |
+          # 定义文件变量
+          FILE1="tmp/_worker_origin.js"
+          FILE2="_worker_origin.js"
+          FILE3="_worker.js"
+
+          cp -f "$FILE1" "$FILE2"
+          # 混淆代码
+          npm install -g javascript-obfuscator
+          javascript-obfuscator "$FILE2" --output "$FILE3" --compact=true --control-flow-flattening=true --dead-code-injection=true --string-array=true
+
+      - name: 提交更新到 GitHub # 提交更新到 GitHub 仓库
+        # 仅在需要更新时执行此步骤
+        if: env.need_update == 'true'
+        run: |
+          # 配置 Git 用户名和邮箱，以便 GitHub Actions 可以提交代码
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add _worker.js _worker_origin.js
+          # 提交更改，提交信息包含更新的版本号
+          git commit -m "Update _worker.js"
+          # 推送更改到远程仓库
+          git push
+
+      - name: 初始化环境
+        # 仅在需要更新时执行此步骤
+        if: env.need_update == 'true'
+        run: |
+          cd "$GITHUB_WORKSPACE"
+          # 安装 wrangler
+          npm install
+
+      - name: 创建 KV 命名空间并绑定到 Worker # 执行 step-kv 脚本创建 KV 并绑定
+        # 仅在需要更新时执行此步骤
+        if: env.need_update == 'true'
+        run: |
+          cd "$GITHUB_WORKSPACE"
+
+          # 设置执行权限
+          chmod +x scripts/step-kv.sh
+
+          # 执行 step-kv 脚本，使用 kv-name 输入参数
+          ./scripts/step-kv.sh "${{ env.KV_NAME }}"
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}
+
+      - name: 更新 wrangler.toml 中的 UUID 变量 # 更新 wrangler.toml 中的 UUID 变量
+        # 仅在需要更新时执行此步骤
+        if: env.need_update == 'true'
+        run: |
+          cd "$GITHUB_WORKSPACE"
+
+          # 检查 secrets.CF_VAR_UUID 是否设置
+          if [ -n "${{ secrets.CF_VAR_UUID }}" ]; then
+            echo "正在更新 wrangler.toml 中的 UUID 变量..."
+
+            # 使用 sed 更新 wrangler.toml 中的 UUID 值
+            sed -i 's/UUID = ".*"/UUID = "${{ secrets.CF_VAR_UUID }}"/' wrangler.toml
+
+            echo "wrangler.toml 中的 UUID 变量已更新"
+          else
+            echo "secrets.CF_VAR_UUID 未设置，跳过更新"
+          fi
+
+      - name: 更新 wrangler.toml 中的 ADMIN 变量 # 更新 wrangler.toml 中的 ADMIN 变量
+        # 仅在需要更新时执行此步骤
+        if: env.need_update == 'true'
+        run: |
+          cd "$GITHUB_WORKSPACE"
+
+          # 检查 secrets.CF_VAR_ADMIN 是否设置
+          if [ -n "${{ secrets.CF_VAR_ADMIN }}" ]; then
+            echo "正在更新 wrangler.toml 中的 ADMIN 变量..."
+
+            # 使用 sed 更新 wrangler.toml 中的 ADMIN 值
+            sed -i 's/ADMIN = ".*"/ADMIN = "${{ secrets.CF_VAR_ADMIN }}"/' wrangler.toml
+
+            echo "wrangler.toml 中的 ADMIN 变量已更新"
+          else
+            echo "secrets.CF_VAR_ADMIN 未设置，跳过更新"
+          fi
+
+      - name: 更新 wrangler.toml 中的自定义域名 # 更新自定义域名配置
+        # 仅在需要更新时执行此步骤
+        if: env.need_update == 'true'
+        run: |
+          cd "$GITHUB_WORKSPACE"
+
+          # 检查 secrets.CF_ROUTE_DOMAIN 是否设置（Repository secrets）
+          if [ -n "${{ secrets.CF_ROUTE_DOMAIN }}" ]; then
+            echo "正在更新 wrangler.toml 添加自定义域名..."
+
+            # 读取当前 wrangler.toml 内容
+            CONTENT=$(cat wrangler.toml)
+
+            # 检查是否已有 [[routes]] 配置
+            if echo "$CONTENT" | grep -qE '^\[\[routes\]\]'; then
+              # 如果已有 routes，删除整个 [[routes]] 部分
+              echo "$CONTENT" | sed -E '/^\[\[routes\]\]$/,/^[[:space:]]*$/d' > wrangler.toml.tmp
+              mv wrangler.toml.tmp wrangler.toml
+            fi
+
+            # 在 wrangler.toml 末尾添加 [[routes]] 配置
+            echo '' >> wrangler.toml
+            echo '[[routes]]' >> wrangler.toml
+            echo 'pattern = "'"${{ secrets.CF_ROUTE_DOMAIN }}"'"' >> wrangler.toml
+            echo 'custom_domain = true' >> wrangler.toml
+
+            # 设置 workers_dev 为 false 以使用自定义域名
+            sed -i 's/workers_dev = true/workers_dev = false/' wrangler.toml
+
+            echo "wrangler.toml 中的自定义域名已添加"
+          else
+            echo "secrets.CF_ROUTE_DOMAIN 未设置，跳过自定义域名配置"
+          fi
+
+      - name: 部署到 Cloudflare Workers # 部署到 Cloudflare Workers
+        # 仅在需要更新时执行此步骤
+        if: env.need_update == 'true'
+        run: |
+          # echo "输出 wrangler.toml 内容:"
+          # cat wrangler.toml
+
+          # 部署 Worker
+          npm run deploy
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}
+
+      - name: Delete old workflow runs
+        uses: Mattraks/delete-workflow-runs@v2
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          repository: ${{ github.repository }}
+          retain_days: 7
+          keep_minimum_runs: 1

@@ -1,0 +1,14 @@
+{
+  "name": "wk-et2-auto-update",
+  "version": "0.0.1",
+  "private": true,
+  "description": "Cloudflare Worker auto-update",
+  "scripts": {
+    "deploy": "wrangler deploy",
+    "dev": "wrangler dev",
+    "start": "wrangler dev"
+  },
+  "devDependencies": {
+    "wrangler": "^4.0.0"
+  }
+}
