@@ -80,7 +80,7 @@ jobs:
           FILE2="_worker_origin.js"
           FILE3="_worker.js"
 
-          cp -f "$FILE1" "$FILE2"
+          cp -f "$FILE1" "$FILE2" && rm -rf "$FILE3"
           # 混淆代码
           npm install -g javascript-obfuscator
           javascript-obfuscator "$FILE2" --output "$FILE3" --compact=true --control-flow-flattening=true --dead-code-injection=true --string-array=true
