@@ -195,8 +195,8 @@ jobs:
         # 仅在需要更新时执行此步骤
         if: env.need_update == 'true'
         run: |
-          # echo "输出 wrangler.toml 内容:"
-          # cat wrangler.toml
+          echo "输出 wrangler.toml 内容"
+          cat wrangler.toml
 
           # 部署 Worker
           npm run deploy
