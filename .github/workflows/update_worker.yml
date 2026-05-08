@@ -132,7 +132,7 @@ jobs:
             echo "正在更新 wrangler.toml 中的 UUID 变量..."
 
             # 使用 sed 更新 wrangler.toml 中的 UUID 值
-            sed -i 's/UUID = ".*"/UUID = "${{ secrets.CF_VAR_UUID }}"/' wrangler.toml
+            sed -i '/^UUID = ".*"/c\UUID = "'"${{ secrets.CF_VAR_UUID }}"'"' wrangler.toml
 
             echo "wrangler.toml 中的 UUID 变量已更新"
           else
@@ -150,7 +150,7 @@ jobs:
             echo "正在更新 wrangler.toml 中的 ADMIN 变量..."
 
             # 使用 sed 更新 wrangler.toml 中的 ADMIN 值
-            sed -i 's/ADMIN = ".*"/ADMIN = "${{ secrets.CF_VAR_ADMIN }}"/' wrangler.toml
+            sed -i '/^ADMIN = ".*"/c\ADMIN = "'"${{ secrets.CF_VAR_ADMIN }}"'"' wrangler.toml
 
             echo "wrangler.toml 中的 ADMIN 变量已更新"
           else
