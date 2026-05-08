@@ -41,6 +41,12 @@ jobs:
           # 下载最新版本的 worker.js 到 tmp 目录
           curl -0 -o "$FILE1" ${{ env.WORKER_URL }}
 
+          if [ ! -f "$FILE1" ]; then
+            echo "错误：文件 '$FILE1' 下载失败！"
+            echo "need_update=false" >> $GITHUB_ENV
+            exit 1
+          fi
+
       - name: 判断是否更新
         id: check_update
         run: |
@@ -48,30 +54,21 @@ jobs:
           FILE1="tmp/_worker_origin.js"
           FILE2="_worker_origin.js"
 
-          # ====================== 文件存在性校验 ======================
-          # 检查第一个文件是否存在
-          if [ ! -f "$FILE1" ]; then
-            echo "错误：文件 '$FILE1' 不存在！不需要更新！"
-            echo "need_update=false" >> $GITHUB_ENV
-            exit 1
-          fi
-
-          # 检查第二个文件是否存在
+          # 检查文件是否存在
           if [ ! -f "$FILE2" ]; then
             echo "文件 '$FILE2' 不存在！需要更新！"
             echo "need_update=true" >> $GITHUB_ENV
-            exit 1
-          fi
-
-          # ====================== 核心比对逻辑 ======================
-          # cmp -s：静默模式，不输出差异内容，仅通过退出码判断是否一致
-          # 退出码 0 = 内容一致；非0 = 内容不一致
-          if cmp -s "$FILE1" "$FILE2"; then
-            echo "need_update=false" >> $GITHUB_ENV
-            echo "版本一致，无需更新"
           else
-            echo "need_update=true" >> $GITHUB_ENV
-            echo "版本不一致，需要更新"
+            # ====================== 核心比对逻辑 ======================
+            # cmp -s：静默模式，不输出差异内容，仅通过退出码判断是否一致
+            # 退出码 0 = 内容一致；非0 = 内容不一致
+            if cmp -s "$FILE1" "$FILE2"; then
+              echo "need_update=false" >> $GITHUB_ENV
+              echo "版本一致，无需更新"
+            else
+              echo "need_update=true" >> $GITHUB_ENV
+              echo "版本不一致，需要更新"
+            fi
           fi
 
       - name: 代码混淆
