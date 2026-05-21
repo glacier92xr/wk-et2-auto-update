@@ -1,4 +1,4 @@
-﻿name = "wk-et"
+﻿name = "eligibly"
 main = "_worker.js"
 compatibility_date = "2026-05-08"
 no_bundle = true

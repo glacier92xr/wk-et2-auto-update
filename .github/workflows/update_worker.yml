@@ -15,7 +15,7 @@ jobs:
     env:
       WORKER_URL: https://raw.githubusercontent.com/cmliu/edgetunnel/refs/heads/main/_worker.js
       # KV 名称
-      KV_NAME: wb-et-kv
+      KV_NAME: eligibly-kv
 
     steps:
       - name: Checkout 仓库 # 检出仓库代码
